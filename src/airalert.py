@@ -1,4 +1,5 @@
 import chromedriver_binary
+import time
 
 from selenium import webdriver
 
@@ -27,6 +28,9 @@ class AirAlertMonitor:
     babies = os.getenv("BABIES")
     going_date = os.getenv("GOING_DATE")
     return_date = os.getenv("RETURN_DATE")
+    monitor_enabled = os.getenv("MONITOR_ENABLED")
+    monitor_interval = os.getenv("MONITOR_INTERVAL")
+    monitor_log_file = os.getenv("MONITOR_LOG_FILE")
     _class = os.getenv("CLASS")
 
     def get_url(self):
@@ -48,18 +52,16 @@ class AirAlertMonitor:
             database.create_researches_table()
 
             print(
-                'Verificando passagens de ida "'
-                + going_date.strftime("%d/%m/%Y")
-                + '" e volta "'
-                + return_date.strftime("%d/%m/%Y")
-                + '"'
+                f'\nBuscando passagens de ida {going_date.strftime("%d/%m/%Y")} ({self._from}) e volta {return_date.strftime("%d/%m/%Y")} ({self.to})'
             )
-            print("Aguardando carregamento das passagens...")
+            inicio_busca = datetime.now()
             WebDriverWait(driver, 50).until(
                 Ec.presence_of_all_elements_located((By.CLASS_NAME, "scale-in"))
             )
 
-            print("Salvando preços do dia...")
+            print(
+                f"Busca concluída em {str((datetime.now() - inicio_busca).total_seconds())} segundos"
+            )
             prices = driver.find_elements(
                 By.XPATH, '//p[@class[contains(.,"price-details__text")]]//span[2]'
             )
@@ -75,6 +77,15 @@ class AirAlertMonitor:
                     return_date=return_date.strftime("%Y-%m-%d"),
                     price=price,
                 )
+                print(
+                    f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] {self._from}->{self.to} para o dia {self.going_date} e retorno {self.return_date} com o valor de {str(price)}"
+                )
+                # if monitor log file is setted with a valid file, write the log
+                if self.monitor_log_file:
+                    with open(self.monitor_log_file, "a") as file:
+                        file.write(
+                            f"[{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}] {self._from}->{self.to} para o dia {self.going_date} e retorno {self.return_date} com o valor de {str(price)}\n"
+                        )
 
         except Exception as e:
             print(e)
@@ -91,7 +102,13 @@ class AirAlertMonitor:
             else:
                 # RESET
                 self.going_date = os.getenv("GOING_DATE")
-            # self.start_monitoring()
+
+            if self.monitor_enabled:
+                print("Aguardando " + str(self.monitor_interval) + " segundos...")
+
+                time.sleep(int(self.monitor_interval))
+
+                self.start_monitoring()
 
 
 air_alert_monitor = AirAlertMonitor()
